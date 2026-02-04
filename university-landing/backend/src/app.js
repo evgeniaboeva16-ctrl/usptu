@@ -27,6 +27,12 @@ const dbConfig = {
   ssl: false
 };
 
+// Импорт моделей базы данных
+// models.js - базовые модели (User, School, Region, etc.)
+// models34.js - расширенные модели (FiasAddress, EducationDocuments)
+require('../database/models');
+require('../database/models34');
+
 async function getConnection() {
   const client = new Client(dbConfig);
   await client.connect();
@@ -48,7 +54,7 @@ const transporter = nodemailer.createTransport({
 async function sendWelcomeEmail(emailData) {
   try {
     const { to, fullName, tempPassword, email } = emailData;
-    
+
     const mailOptions = {
       from: `"UniVerse" <${process.env.EMAIL_USER}>`,
       to: to,
@@ -222,11 +228,11 @@ async function sendWelcomeEmail(emailData) {
         </html>
       `
     };
-    
+
     const info = await transporter.sendMail(mailOptions);
     console.log('✅ Email отправлен успешно:', info.messageId);
     return { success: true, messageId: info.messageId };
-    
+
   } catch (error) {
     console.error('❌ Ошибка отправки email:', error);
     return { success: false, error: error.message };
@@ -240,9 +246,9 @@ async function initializeDatabase() {
   try {
     console.log('🔧 Проверка и инициализация базы данных...');
     client = await getConnection();
-    
+
     const tables = ['users', 'abiturient_profiles', 'schools', 'regions', 'events', 'event_registrations', 'event_attendance'];
-    
+
     for (const table of tables) {
       const tableCheck = await client.query(`
         SELECT EXISTS (
@@ -251,10 +257,10 @@ async function initializeDatabase() {
           AND table_name = $1
         )
       `, [table]);
-      
+
       if (!tableCheck.rows[0].exists) {
         console.log(`⚠️ Таблица ${table} отсутствует, создаем...`);
-        
+
         if (table === 'events') {
           await client.query(`
             CREATE TABLE IF NOT EXISTS events (
@@ -309,13 +315,13 @@ async function initializeDatabase() {
         }
       }
     }
-    
+
     const usersColumns = await client.query(`
       SELECT column_name 
       FROM information_schema.columns 
       WHERE table_name = 'users' AND column_name = 'updated_at'
     `);
-    
+
     if (usersColumns.rows.length === 0) {
       console.log('🔄 Добавляем поле updated_at в таблицу users...');
       await client.query(`
@@ -323,9 +329,9 @@ async function initializeDatabase() {
       `);
       console.log('✅ Поле updated_at добавлено');
     }
-    
+
     console.log('✅ База данных инициализирована');
-    
+
   } catch (error) {
     console.error('❌ Ошибка инициализации базы данных:', error.message);
   } finally {
@@ -338,19 +344,19 @@ initializeDatabase();
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
-  
+
   if (!token) {
-    return res.status(401).json({ 
+    return res.status(401).json({
       success: false,
-      error: 'Токен отсутствует. Пожалуйста, войдите в систему.' 
+      error: 'Токен отсутствует. Пожалуйста, войдите в систему.'
     });
   }
-  
+
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) {
-      return res.status(403).json({ 
+      return res.status(403).json({
         success: false,
-        error: 'Недействительный или просроченный токен' 
+        error: 'Недействительный или просроченный токен'
       });
     }
     req.user = user;
@@ -361,25 +367,25 @@ const authenticateToken = (req, res, next) => {
 const isSpecialist = (req, res, next) => {
   try {
     if (!req.user) {
-      return res.status(401).json({ 
+      return res.status(401).json({
         success: false,
-        error: 'Пользователь не авторизован' 
+        error: 'Пользователь не авторизован'
       });
     }
-    
+
     if (req.user.email !== 'elisonkein@yahoo.com') {
-      return res.status(403).json({ 
+      return res.status(403).json({
         success: false,
-        error: 'Доступ разрешен только для специалистов УГНТУ' 
+        error: 'Доступ разрешен только для специалистов УГНТУ'
       });
     }
-    
+
     next();
   } catch (error) {
     console.error('Ошибка проверки специалиста:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      error: 'Ошибка проверки прав доступа' 
+      error: 'Ошибка проверки прав доступа'
     });
   }
 };
@@ -387,12 +393,12 @@ const isSpecialist = (req, res, next) => {
 let newsCache = {
   data: null,
   timestamp: null,
-  ttl: 15 * 60 * 1000 
+  ttl: 15 * 60 * 1000
 };
 
 // ТЕСТОВЫЕ МАРШРУТЫ
 app.get('/', (req, res) => {
-  res.json({ 
+  res.json({
     success: true,
     message: 'Сервер УГНТУ работает с базой данных NIRS!',
     timestamp: new Date().toISOString(),
@@ -429,16 +435,16 @@ app.get('/', (req, res) => {
 app.get('/api/debug/tables', async (req, res) => {
   try {
     const client = await getConnection();
-    
+
     const tables = await client.query(`
       SELECT table_name 
       FROM information_schema.tables 
       WHERE table_schema = 'public'
       ORDER BY table_name
     `);
-    
+
     const tableDetails = [];
-    
+
     for (const table of tables.rows) {
       const columns = await client.query(`
         SELECT column_name, data_type 
@@ -446,21 +452,21 @@ app.get('/api/debug/tables', async (req, res) => {
         WHERE table_name = $1
         ORDER BY ordinal_position
       `, [table.table_name]);
-      
+
       tableDetails.push({
         name: table.table_name,
         columns: columns.rows
       });
     }
-    
+
     await client.end();
-    
+
     res.json({
       success: true,
       tables: tableDetails,
       timestamp: new Date().toISOString()
     });
-    
+
   } catch (error) {
     console.error('❌ Ошибка проверки таблиц:', error);
     res.status(500).json({
@@ -473,22 +479,22 @@ app.get('/api/debug/tables', async (req, res) => {
 app.get('/health', async (req, res) => {
   try {
     const client = await getConnection();
-    
+
     const usersResult = await client.query('SELECT COUNT(*) as count FROM users');
     const abiturientsResult = await client.query('SELECT COUNT(*) as count FROM abiturient_profiles');
     const schoolsResult = await client.query('SELECT COUNT(*) as count FROM schools');
     const regionsResult = await client.query('SELECT COUNT(*) as count FROM regions');
-    
+
     let eventsCount = 0;
     try {
       const eventsResult = await client.query('SELECT COUNT(*) as count FROM events');
       eventsCount = parseInt(eventsResult.rows[0].count);
     } catch (e) {
     }
-    
+
     await client.end();
-    
-    res.json({ 
+
+    res.json({
       status: 'OK',
       serverTime: new Date().toISOString(),
       uptime: process.uptime(),
@@ -520,21 +526,21 @@ app.get('/health', async (req, res) => {
 
 app.post('/api/auth/login', async (req, res) => {
   let client;
-  
+
   try {
     console.log('Попытка входа:', req.body.email);
-    
+
     const { email, password } = req.body;
-    
+
     if (!email || !password) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        error: 'Email и пароль обязательны для заполнения' 
+        error: 'Email и пароль обязательны для заполнения'
       });
     }
-    
+
     client = await getConnection();
-    
+
     const userResult = await client.query(
       `SELECT 
         u.id, 
@@ -554,57 +560,57 @@ app.post('/api/auth/login', async (req, res) => {
       WHERE u.email = $1`,
       [email]
     );
-    
+
     if (userResult.rows.length === 0) {
       await client.end();
-      return res.status(401).json({ 
+      return res.status(401).json({
         success: false,
-        error: 'Пользователь с таким email не найден' 
+        error: 'Пользователь с таким email не найден'
       });
     }
-    
+
     const user = userResult.rows[0];
-    
+
     if (!user.is_active) {
       await client.end();
-      return res.status(403).json({ 
+      return res.status(403).json({
         success: false,
-        error: 'Аккаунт деактивирован. Обратитесь к администратору.' 
+        error: 'Аккаунт деактивирован. Обратитесь к администратору.'
       });
     }
-    
+
     const validPassword = await bcrypt.compare(password, user.password_hash);
     if (!validPassword) {
       await client.end();
-      return res.status(401).json({ 
+      return res.status(401).json({
         success: false,
-        error: 'Неверный пароль' 
+        error: 'Неверный пароль'
       });
     }
-    
+
     let userRole = user.role;
     if (email === 'elisonkein@yahoo.com') {
       userRole = 'specialist';
     }
-    
+
     const token = jwt.sign(
-      { 
-        id: user.id, 
-        email: user.email, 
+      {
+        id: user.id,
+        email: user.email,
         role: userRole,
-        full_name: user.full_name 
+        full_name: user.full_name
       },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
-    
+
     await client.query(
       'UPDATE users SET last_login = $1 WHERE id = $2',
       [new Date(), user.id]
     );
-    
+
     await client.end();
-    
+
     const userResponse = {
       id: user.id,
       email: user.email,
@@ -615,9 +621,9 @@ app.post('/api/auth/login', async (req, res) => {
       school: user.school_name || null,
       region: user.region_name || null
     };
-    
+
     console.log('✅ Успешный вход пользователя:', user.email, 'Роль:', userRole);
-    
+
     res.json({
       success: true,
       message: 'Вход выполнен успешно',
@@ -625,13 +631,13 @@ app.post('/api/auth/login', async (req, res) => {
       user: userResponse,
       expiresIn: '7 дней'
     });
-    
+
   } catch (error) {
     if (client) await client.end();
     console.error('❌ Ошибка входа:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      error: 'Внутренняя ошибка сервера при входе в систему' 
+      error: 'Внутренняя ошибка сервера при входе в систему'
     });
   }
 });
@@ -639,8 +645,8 @@ app.post('/api/auth/login', async (req, res) => {
 //ЛИЧНЫЙ КАБИНЕТ СПЕЦИАЛИСТА
 
 app.get('/api/specialist/verify', authenticateToken, isSpecialist, (req, res) => {
-  res.json({ 
-    success: true, 
+  res.json({
+    success: true,
     message: 'Доступ специалиста подтвержден',
     user: req.user,
     timestamp: new Date().toISOString()
@@ -649,23 +655,23 @@ app.get('/api/specialist/verify', authenticateToken, isSpecialist, (req, res) =>
 
 app.get('/api/specialist/stats', authenticateToken, isSpecialist, async (req, res) => {
   let client;
-  
+
   try {
     console.log('📊 Запрос статистики для специалиста:', req.user.email);
-    
+
     client = await getConnection();
-    
+
     let totalEvents = 0;
     let totalParticipants = 0;
     let upcomingEvents = 0;
-    
+
     try {
       const totalEventsResult = await client.query(
         'SELECT COUNT(*) as count FROM events WHERE created_by = $1',
         [req.user.id]
       );
       totalEvents = parseInt(totalEventsResult.rows[0].count) || 0;
-      
+
       const participantsResult = await client.query(`
         SELECT COUNT(DISTINCT er.user_id) as count 
         FROM event_registrations er
@@ -673,7 +679,7 @@ app.get('/api/specialist/stats', authenticateToken, isSpecialist, async (req, re
         WHERE e.created_by = $1
       `, [req.user.id]);
       totalParticipants = parseInt(participantsResult.rows[0].count) || 0;
-      
+
       const upcomingResult = await client.query(`
         SELECT COUNT(*) as count 
         FROM events 
@@ -684,9 +690,9 @@ app.get('/api/specialist/stats', authenticateToken, isSpecialist, async (req, re
     } catch (error) {
       console.log('⚠️ Ошибка при получении статистики:', error.message);
     }
-    
+
     await client.end();
-    
+
     const stats = {
       totalEvents,
       totalParticipants,
@@ -699,18 +705,18 @@ app.get('/api/specialist/stats', authenticateToken, isSpecialist, async (req, re
       budgetUsed: 85000,
       lastUpdated: new Date().toISOString()
     };
-    
+
     console.log('✅ Статистика загружена для специалиста');
-    
+
     res.json({
       success: true,
       stats
     });
-    
+
   } catch (error) {
     if (client) await client.end();
     console.error('❌ Ошибка загрузки статистики специалиста:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: 'Ошибка загрузки статистики',
       stats: {
@@ -731,12 +737,12 @@ app.get('/api/specialist/stats', authenticateToken, isSpecialist, async (req, re
 
 app.get('/api/specialist/events', authenticateToken, isSpecialist, async (req, res) => {
   let client;
-  
+
   try {
     console.log('📅 Запрос мероприятий для специалиста:', req.user.email);
-    
+
     client = await getConnection();
-    
+
     const tableCheck = await client.query(`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
@@ -744,7 +750,7 @@ app.get('/api/specialist/events', authenticateToken, isSpecialist, async (req, r
         AND table_name = 'events'
       )
     `);
-    
+
     if (!tableCheck.rows[0].exists) {
       await client.end();
       return res.json({
@@ -754,7 +760,7 @@ app.get('/api/specialist/events', authenticateToken, isSpecialist, async (req, r
         message: 'Таблица мероприятий еще не создана'
       });
     }
-    
+
     const result = await client.query(`
       SELECT 
         e.id,
@@ -794,21 +800,21 @@ app.get('/api/specialist/events', authenticateToken, isSpecialist, async (req, r
       WHERE e.created_by = $1
       ORDER BY e.start_datetime DESC
     `, [req.user.id]);
-    
+
     await client.end();
-    
+
     console.log(`✅ Найдено ${result.rows.length} мероприятий для специалиста`);
-    
+
     res.json({
       success: true,
       events: result.rows,
       count: result.rows.length
     });
-    
+
   } catch (error) {
     if (client) await client.end();
     console.error('❌ Ошибка загрузки мероприятий для специалиста:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: 'Ошибка загрузки мероприятий',
       events: [
@@ -845,10 +851,10 @@ app.get('/api/specialist/events', authenticateToken, isSpecialist, async (req, r
 
 app.get('/api/specialist/events/upcoming', authenticateToken, isSpecialist, async (req, res) => {
   let client;
-  
+
   try {
     client = await getConnection();
-    
+
     const result = await client.query(`
       SELECT 
         e.id,
@@ -874,19 +880,19 @@ app.get('/api/specialist/events/upcoming', authenticateToken, isSpecialist, asyn
       ORDER BY e.start_datetime
       LIMIT 10
     `, [req.user.id]);
-    
+
     await client.end();
-    
+
     res.json({
       success: true,
       events: result.rows,
       count: result.rows.length
     });
-    
+
   } catch (error) {
     if (client) await client.end();
     console.error('❌ Ошибка загрузки ближайших мероприятий:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: 'Ошибка загрузки мероприятий',
       events: [
@@ -908,9 +914,9 @@ app.get('/api/specialist/events/upcoming', authenticateToken, isSpecialist, asyn
 
 app.post('/api/specialist/events', authenticateToken, isSpecialist, async (req, res) => {
   let client = await getConnection();
-  
+
   try {
-    const { 
+    const {
       title,
       description,
       short_description,
@@ -930,19 +936,19 @@ app.post('/api/specialist/events', authenticateToken, isSpecialist, async (req, 
       budget,
       cost_per_participant
     } = req.body;
-    
+
     console.log('📝 Создание мероприятия специалистом:', req.user.email, title);
-    
+
     if (!title || !start_datetime || !end_datetime) {
       await client.end();
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        error: 'Название, дата начала и окончания обязательны для заполнения' 
+        error: 'Название, дата начала и окончания обязательны для заполнения'
       });
     }
-    
+
     await client.query('BEGIN');
-    
+
     const result = await client.query(
       `INSERT INTO events (
         title,
@@ -992,27 +998,27 @@ app.post('/api/specialist/events', authenticateToken, isSpecialist, async (req, 
         new Date()
       ]
     );
-    
+
     await client.query('COMMIT');
     await client.end();
-    
+
     const newEvent = result.rows[0];
-    
+
     console.log('✅ Мероприятие создано:', newEvent.id, newEvent.title);
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       message: 'Мероприятие успешно создано',
       event: newEvent,
       timestamp: new Date().toISOString()
     });
-    
+
   } catch (error) {
     await client.query('ROLLBACK');
     await client.end();
-    
+
     console.error('❌ Ошибка создания мероприятия:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: 'Ошибка создания мероприятия',
       message: error.message
@@ -1022,40 +1028,40 @@ app.post('/api/specialist/events', authenticateToken, isSpecialist, async (req, 
 
 app.put('/api/specialist/events/:id', authenticateToken, isSpecialist, async (req, res) => {
   let client = await getConnection();
-  
+
   try {
     const eventId = req.params.id;
     const eventData = req.body;
-    
+
     console.log('✏️ Обновление мероприятия специалистом:', req.user.email, eventId);
-    
+
     await client.query('BEGIN');
-    
+
     const checkResult = await client.query(
       'SELECT id FROM events WHERE id = $1 AND created_by = $2',
       [eventId, req.user.id]
     );
-    
+
     if (checkResult.rows.length === 0) {
       await client.query('ROLLBACK');
       await client.end();
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        error: 'Мероприятие не найдено или нет прав для редактирования' 
+        error: 'Мероприятие не найдено или нет прав для редактирования'
       });
     }
-    
+
     const updateFields = [];
     const updateValues = [];
     let paramIndex = 1;
-    
+
     const allowedFields = [
       'title', 'description', 'short_description', 'type', 'format', 'category',
       'start_datetime', 'end_datetime', 'registration_start', 'registration_end',
       'status', 'location_type', 'address', 'online_link', 'max_participants',
       'min_participants', 'budget', 'cost_per_participant'
     ];
-    
+
     for (const field of allowedFields) {
       if (eventData[field] !== undefined) {
         updateFields.push(`${field} = $${paramIndex}`);
@@ -1063,52 +1069,52 @@ app.put('/api/specialist/events/:id', authenticateToken, isSpecialist, async (re
         paramIndex++;
       }
     }
-    
+
     if (updateFields.length === 0) {
       await client.query('ROLLBACK');
       await client.end();
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        error: 'Нет данных для обновления' 
+        error: 'Нет данных для обновления'
       });
     }
-    
+
     updateFields.push(`updated_at = $${paramIndex}`);
     updateValues.push(new Date());
     paramIndex++;
-    
+
     updateValues.push(eventId);
     updateValues.push(req.user.id);
-    
+
     const updateQuery = `
       UPDATE events 
       SET ${updateFields.join(', ')} 
-      WHERE id = $${paramIndex-1} AND created_by = $${paramIndex}
+      WHERE id = $${paramIndex - 1} AND created_by = $${paramIndex}
       RETURNING id, title, short_description, type, format, start_datetime, end_datetime, status, location_type, address, online_link, max_participants, current_participants
     `;
-    
+
     const result = await client.query(updateQuery, updateValues);
-    
+
     await client.query('COMMIT');
     await client.end();
-    
+
     const updatedEvent = result.rows[0];
-    
+
     console.log('✅ Мероприятие обновлено:', updatedEvent.id, updatedEvent.title);
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       message: 'Мероприятие успешно обновлено',
       event: updatedEvent,
       timestamp: new Date().toISOString()
     });
-    
+
   } catch (error) {
     await client.query('ROLLBACK');
     await client.end();
-    
+
     console.error('❌ Ошибка обновления мероприятия:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: 'Ошибка обновления мероприятия',
       message: error.message
@@ -1118,54 +1124,54 @@ app.put('/api/specialist/events/:id', authenticateToken, isSpecialist, async (re
 
 app.delete('/api/specialist/events/:id', authenticateToken, isSpecialist, async (req, res) => {
   let client = await getConnection();
-  
+
   try {
     const eventId = req.params.id;
-    
+
     console.log('🗑️ Удаление мероприятия специалистом:', req.user.email, eventId);
-    
+
     await client.query('BEGIN');
-    
+
     const checkResult = await client.query(
       'SELECT id, title FROM events WHERE id = $1 AND created_by = $2',
       [eventId, req.user.id]
     );
-    
+
     if (checkResult.rows.length === 0) {
       await client.query('ROLLBACK');
       await client.end();
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        error: 'Мероприятие не найдено или нет прав для удаления' 
+        error: 'Мероприятие не найдено или нет прав для удаления'
       });
     }
-    
+
     const eventTitle = checkResult.rows[0].title;
-    
+
     await client.query('DELETE FROM event_registrations WHERE event_id = $1', [eventId]);
     await client.query('DELETE FROM event_attendance WHERE event_id = $1', [eventId]);
-    
+
     await client.query('DELETE FROM events WHERE id = $1', [eventId]);
-    
+
     await client.query('COMMIT');
     await client.end();
-    
+
     console.log('✅ Мероприятие удалено:', eventId, eventTitle);
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       message: 'Мероприятие успешно удалено',
       eventId: eventId,
       eventTitle: eventTitle,
       timestamp: new Date().toISOString()
     });
-    
+
   } catch (error) {
     await client.query('ROLLBACK');
     await client.end();
-    
+
     console.error('❌ Ошибка удаления мероприятия:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: 'Ошибка удаления мероприятия',
       message: error.message
@@ -1175,38 +1181,38 @@ app.delete('/api/specialist/events/:id', authenticateToken, isSpecialist, async 
 
 app.post('/api/specialist/events/duplicate', authenticateToken, isSpecialist, async (req, res) => {
   let client = await getConnection();
-  
+
   try {
     const { event_id } = req.body;
-    
+
     if (!event_id) {
       await client.end();
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        error: 'ID мероприятия обязателен' 
+        error: 'ID мероприятия обязателен'
       });
     }
-    
+
     console.log('📋 Дублирование мероприятия специалистом:', req.user.email, event_id);
-    
+
     await client.query('BEGIN');
-    
+
     const originalResult = await client.query(
       'SELECT * FROM events WHERE id = $1 AND created_by = $2',
       [event_id, req.user.id]
     );
-    
+
     if (originalResult.rows.length === 0) {
       await client.query('ROLLBACK');
       await client.end();
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        error: 'Мероприятие не найдено или нет прав для копирования' 
+        error: 'Мероприятие не найдено или нет прав для копирования'
       });
     }
-    
+
     const originalEvent = originalResult.rows[0];
-    
+
     const result = await client.query(
       `INSERT INTO events (
         title,
@@ -1241,7 +1247,7 @@ app.post('/api/specialist/events/duplicate', authenticateToken, isSpecialist, as
         originalEvent.category,
         new Date(new Date(originalEvent.start_datetime).getTime() + 7 * 24 * 60 * 60 * 1000), // +7 дней
         new Date(new Date(originalEvent.end_datetime).getTime() + 7 * 24 * 60 * 60 * 1000),
-        null, 
+        null,
         null,
         'draft',
         originalEvent.location_type,
@@ -1256,27 +1262,27 @@ app.post('/api/specialist/events/duplicate', authenticateToken, isSpecialist, as
         new Date()
       ]
     );
-    
+
     await client.query('COMMIT');
     await client.end();
-    
+
     const duplicatedEvent = result.rows[0];
-    
+
     console.log('✅ Мероприятие продублировано:', duplicatedEvent.id, duplicatedEvent.title);
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       message: 'Мероприятие успешно продублировано',
       event: duplicatedEvent,
       timestamp: new Date().toISOString()
     });
-    
+
   } catch (error) {
     await client.query('ROLLBACK');
     await client.end();
-    
+
     console.error('❌ Ошибка дублирования мероприятия:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: 'Ошибка дублирования мероприятия',
       message: error.message
@@ -1288,20 +1294,20 @@ app.post('/api/specialist/events/duplicate', authenticateToken, isSpecialist, as
 
 app.post('/api/register', async (req, res) => {
   let client = await getConnection();
-  
+
   try {
     console.log('📨 Получен запрос на регистрацию:', req.body);
-    
-    const { 
-      email, 
-      lastName, 
-      firstName, 
-      middleName, 
-      phone, 
-      school, 
-      grade, 
-      region, 
-      consent 
+
+    const {
+      email,
+      lastName,
+      firstName,
+      middleName,
+      phone,
+      school,
+      grade,
+      region,
+      consent
     } = req.body;
 
     if (!email || !lastName || !firstName || !consent) {
@@ -1334,7 +1340,7 @@ app.post('/api/register', async (req, res) => {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
       [email, passwordHash, 'abiturient', fullName, phone || null, new Date(), true, new Date()]
     );
-    
+
     const userId = userResult.rows[0].id;
     console.log('✅ Пользователь создан, ID:', userId);
 
@@ -1344,7 +1350,7 @@ app.post('/api/register', async (req, res) => {
         'SELECT id FROM schools WHERE name ILIKE $1 LIMIT 1',
         [`%${school}%`]
       );
-      
+
       if (schoolResult.rows.length > 0) {
         schoolId = schoolResult.rows[0].id;
       } else {
@@ -1363,7 +1369,7 @@ app.post('/api/register', async (req, res) => {
         'SELECT id FROM regions WHERE name ILIKE $1 LIMIT 1',
         [`%${region}%`]
       );
-      
+
       if (regionResult.rows.length > 0) {
         regionId = regionResult.rows[0].id;
       } else {
@@ -1390,7 +1396,7 @@ app.post('/api/register', async (req, res) => {
         regionId
       ]
     );
-    
+
     console.log('✅ Профиль абитуриента создан');
 
     try {
@@ -1408,11 +1414,11 @@ app.post('/api/register', async (req, res) => {
     await client.end();
 
     const token = jwt.sign(
-      { 
-        id: userId, 
-        email: email, 
+      {
+        id: userId,
+        email: email,
         role: 'abiturient',
-        full_name: fullName 
+        full_name: fullName
       },
       JWT_SECRET,
       { expiresIn: '7d' }
@@ -1454,11 +1460,11 @@ app.post('/api/register', async (req, res) => {
   } catch (error) {
     await client.query('ROLLBACK');
     await client.end();
-    
+
     console.error('❌ Ошибка при регистрации:', error);
     console.error('Полный стек ошибки:', error.stack);
     console.error('Детали ошибки:', error.detail || 'Нет дополнительной информации');
-    
+
     res.status(500).json({
       success: false,
       error: 'Ошибка при сохранении данных в базу',
@@ -1472,13 +1478,13 @@ app.post('/api/register', async (req, res) => {
 
 app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
   let client;
-  
+
   try {
     const userId = req.user.id;
     console.log('📊 Запрос статистики для пользователя:', userId);
-    
+
     client = await getConnection();
-    
+
     let totalEvents = 0;
     try {
       const totalEventsResult = await client.query(
@@ -1488,7 +1494,7 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
     } catch (error) {
       console.log('⚠️ Таблица events не существует или недоступна');
     }
-    
+
     let attendedEvents = 0;
     try {
       const attendedEventsResult = await client.query(
@@ -1501,7 +1507,7 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
     } catch (error) {
       console.log('⚠️ Таблица event_attendance не существует или недоступна');
     }
-    
+
     let totalPoints = 0;
     try {
       const pointsResult = await client.query(
@@ -1514,7 +1520,7 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
     } catch (error) {
       console.log('⚠️ Таблица user_points не существует или недоступна');
     }
-    
+
     let registeredEvents = 0;
     try {
       const registeredEventsResult = await client.query(
@@ -1527,9 +1533,9 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
     } catch (error) {
       console.log('⚠️ Таблица event_registrations не существует или недоступна');
     }
-    
+
     await client.end();
-    
+
     const stats = {
       totalEvents,
       attendedEvents,
@@ -1537,18 +1543,18 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
       totalPoints,
       lastUpdated: new Date().toISOString()
     };
-    
+
     console.log('✅ Статистика загружена:', stats);
-    
+
     res.json({
       success: true,
       stats
     });
-    
+
   } catch (error) {
     if (client) await client.end();
     console.error('❌ Ошибка загрузки статистики:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: 'Ошибка загрузки статистики',
       message: error.message
@@ -1558,13 +1564,13 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
 
 app.get('/api/dashboard/profile', authenticateToken, async (req, res) => {
   let client;
-  
+
   try {
     const userId = req.user.id;
     console.log('👤 Запрос профиля для пользователя:', userId);
-    
+
     client = await getConnection();
-    
+
     const result = await client.query(
       `SELECT 
         u.id,
@@ -1591,36 +1597,36 @@ app.get('/api/dashboard/profile', authenticateToken, async (req, res) => {
       WHERE u.id = $1`,
       [userId]
     );
-    
+
     await client.end();
-    
+
     if (result.rows.length === 0) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        error: 'Профиль не найден' 
+        error: 'Профиль не найден'
       });
     }
-    
+
     const profile = result.rows[0];
-    
+
     res.json({
       success: true,
       profile
     });
-    
+
   } catch (error) {
     if (client) await client.end();
     console.error('❌ Ошибка загрузки профиля:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      error: 'Ошибка загрузки профиля' 
+      error: 'Ошибка загрузки профиля'
     });
   }
 });
 
 app.put('/api/dashboard/profile', authenticateToken, async (req, res) => {
   let client = await getConnection();
-  
+
   try {
     const userId = req.user.id;
     const {
@@ -1631,13 +1637,13 @@ app.put('/api/dashboard/profile', authenticateToken, async (req, res) => {
       parent_name,
       parent_phone,
       preferred_faculties,
-      full_name 
+      full_name
     } = req.body;
-    
+
     console.log('✏️ Обновление профиля для пользователя:', userId, req.body);
-    
+
     await client.query('BEGIN');
-    
+
     if (full_name !== undefined && full_name !== null && full_name.trim() !== '') {
       await client.query(
         'UPDATE users SET full_name = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
@@ -1645,7 +1651,7 @@ app.put('/api/dashboard/profile', authenticateToken, async (req, res) => {
       );
       console.log('✅ ФИО обновлено в users:', full_name);
     }
-    
+
     if (phone !== undefined && phone !== null) {
       await client.query(
         'UPDATE users SET phone = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
@@ -1653,7 +1659,7 @@ app.put('/api/dashboard/profile', authenticateToken, async (req, res) => {
       );
       console.log('✅ Телефон обновлен в users:', phone);
     }
-    
+
     await client.query(
       `INSERT INTO abiturient_profiles (
         user_id, birth_date, grade, interests,
@@ -1677,9 +1683,9 @@ app.put('/api/dashboard/profile', authenticateToken, async (req, res) => {
         preferred_faculties || null
       ]
     );
-    
+
     console.log('✅ Профиль абитуриента обновлен');
-    
+
     const updatedUser = await client.query(
       `SELECT u.id, u.email, u.full_name, u.phone, u.role,
               ap.birth_date, ap.grade, ap.interests, ap.parent_name, 
@@ -1693,25 +1699,25 @@ app.put('/api/dashboard/profile', authenticateToken, async (req, res) => {
        WHERE u.id = $1`,
       [userId]
     );
-    
+
     await client.query('COMMIT');
     await client.end();
-    
+
     console.log('✅ Профиль полностью обновлен для пользователя:', userId);
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       message: 'Профиль успешно обновлен',
-      user: updatedUser.rows[0] || {}, 
+      user: updatedUser.rows[0] || {},
       timestamp: new Date().toISOString()
     });
-    
+
   } catch (error) {
     await client.query('ROLLBACK');
     await client.end();
-    
+
     console.error('❌ Ошибка обновления профиля:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: 'Ошибка обновления профиля',
       message: error.message,
@@ -1724,15 +1730,15 @@ app.put('/api/dashboard/profile', authenticateToken, async (req, res) => {
 
 app.get('/api/dashboard/events', authenticateToken, async (req, res) => {
   let client;
-  
+
   try {
     const userId = req.user.id;
     const { category, date } = req.query;
-    
+
     console.log('📅 Запрос мероприятий для пользователя:', userId);
-    
+
     client = await getConnection();
-    
+
     const tableCheck = await client.query(`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
@@ -1740,7 +1746,7 @@ app.get('/api/dashboard/events', authenticateToken, async (req, res) => {
         AND table_name = 'events'
       )
     `);
-    
+
     if (!tableCheck.rows[0].exists) {
       await client.end();
       return res.json({
@@ -1750,7 +1756,7 @@ app.get('/api/dashboard/events', authenticateToken, async (req, res) => {
         message: 'Таблица мероприятий еще не создана'
       });
     }
-    
+
     let query = `
   SELECT 
     e.id,
@@ -1808,16 +1814,16 @@ app.get('/api/dashboard/events', authenticateToken, async (req, res) => {
   WHERE e.status IN ('published', 'registration_open', 'active')
     AND e.start_datetime >= CURRENT_TIMESTAMP
 `;
-    
+
     const params = [userId];
     let paramIndex = 2;
-    
+
     if (category && category !== 'all') {
       query += ` AND e.category = $${paramIndex}`;
       params.push(category);
       paramIndex++;
     }
-    
+
     if (date) {
       switch (date) {
         case 'today':
@@ -1831,28 +1837,28 @@ app.get('/api/dashboard/events', authenticateToken, async (req, res) => {
           break;
       }
     }
-    
+
     query += ` ORDER BY e.start_datetime`;
-    
+
     const result = await client.query(query, params);
-    
+
     await client.end();
-    
+
     console.log(`✅ Найдено ${result.rows.length} мероприятий`);
-    
+
     res.json({
       success: true,
       events: result.rows,
       count: result.rows.length
     });
-    
+
   } catch (error) {
     if (client) await client.end();
     console.error('❌ Ошибка загрузки мероприятий:', error);
     console.error('Детали ошибки:', error.message);
     console.error('Полный стек:', error.stack);
-    
-    res.status(500).json({ 
+
+    res.status(500).json({
       success: false,
       error: 'Ошибка загрузки мероприятий',
       message: error.message,
@@ -1863,96 +1869,96 @@ app.get('/api/dashboard/events', authenticateToken, async (req, res) => {
 });
 app.post('/api/dashboard/events/:eventId/register', authenticateToken, async (req, res) => {
   let client = await getConnection();
-  
+
   try {
     const userId = req.user.id;
     const eventId = req.params.eventId;
-    
+
     console.log(`🎫 Запись пользователя ${userId} на мероприятие ${eventId}`);
-    
+
     await client.query('BEGIN');
-    
+
     const eventResult = await client.query(
       'SELECT id, title, max_participants, start_datetime, status FROM events WHERE id = $1',
       [eventId]
     );
-    
+
     if (eventResult.rows.length === 0) {
       await client.query('ROLLBACK');
       await client.end();
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        error: 'Мероприятие не найдено' 
+        error: 'Мероприятие не найдено'
       });
     }
-    
+
     const event = eventResult.rows[0];
-    
+
     if (new Date(event.start_datetime) < new Date()) {
       await client.query('ROLLBACK');
       await client.end();
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        error: 'Мероприятие уже прошло' 
+        error: 'Мероприятие уже прошло'
       });
     }
-    
+
     if (event.status !== 'registration_open') {
       await client.query('ROLLBACK');
       await client.end();
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        error: 'Регистрация на это мероприятие закрыта' 
+        error: 'Регистрация на это мероприятие закрыта'
       });
     }
-    
+
     const existingRegistration = await client.query(
       'SELECT id FROM event_registrations WHERE user_id = $1 AND event_id = $2',
       [userId, eventId]
     );
-    
+
     if (existingRegistration.rows.length > 0) {
       await client.query('ROLLBACK');
       await client.end();
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        error: 'Вы уже записаны на это мероприятие' 
+        error: 'Вы уже записаны на это мероприятие'
       });
     }
-    
+
     const participantsCountResult = await client.query(
       'SELECT COUNT(*) as count FROM event_registrations WHERE event_id = $1',
       [eventId]
     );
-    
+
     const currentParticipants = parseInt(participantsCountResult.rows[0].count);
-    
+
     if (event.max_participants && currentParticipants >= event.max_participants) {
       await client.query('ROLLBACK');
       await client.end();
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        error: 'Мест на мероприятие больше нет' 
+        error: 'Мест на мероприятие больше нет'
       });
     }
-    
+
     await client.query(
       'INSERT INTO event_registrations (user_id, event_id, registered_at) VALUES ($1, $2, NOW())',
       [userId, eventId]
     );
-    
+
     await client.query(
       'UPDATE events SET current_participants = current_participants + 1 WHERE id = $1',
       [eventId]
     );
-    
+
     await client.query('COMMIT');
     await client.end();
-    
+
     console.log('✅ Пользователь успешно записан на мероприятие');
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       message: 'Вы успешно записались на мероприятие',
       event: {
         id: event.id,
@@ -1960,13 +1966,13 @@ app.post('/api/dashboard/events/:eventId/register', authenticateToken, async (re
         start_datetime: event.start_datetime
       }
     });
-    
+
   } catch (error) {
     await client.query('ROLLBACK');
     await client.end();
-    
+
     console.error('❌ Ошибка записи на мероприятие:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: 'Ошибка записи на мероприятие',
       message: error.message
@@ -1976,14 +1982,14 @@ app.post('/api/dashboard/events/:eventId/register', authenticateToken, async (re
 
 app.get('/api/dashboard/my-events', authenticateToken, async (req, res) => {
   let client;
-  
+
   try {
     const userId = req.user.id;
-    
+
     console.log('📋 Запрос истории мероприятий для пользователя:', userId);
-    
+
     client = await getConnection();
-    
+
     const result = await client.query(
       `SELECT 
         e.id,
@@ -2008,11 +2014,11 @@ app.get('/api/dashboard/my-events', authenticateToken, async (req, res) => {
       ORDER BY e.start_datetime DESC, er.registered_at DESC`,
       [userId]
     );
-    
+
     const upcoming = [];
     const attended = [];
     const registered = [];
-    
+
     result.rows.forEach(event => {
       if (event.attended) {
         attended.push(event);
@@ -2022,11 +2028,11 @@ app.get('/api/dashboard/my-events', authenticateToken, async (req, res) => {
         registered.push(event);
       }
     });
-    
+
     await client.end();
-    
+
     console.log(`✅ Найдено ${result.rows.length} мероприятий в истории`);
-    
+
     res.json({
       success: true,
       events: {
@@ -2042,13 +2048,13 @@ app.get('/api/dashboard/my-events', authenticateToken, async (req, res) => {
         registered: registered.length
       }
     });
-    
+
   } catch (error) {
     if (client) await client.end();
     console.error('❌ Ошибка загрузки истории мероприятий:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      error: 'Ошибка загрузки истории мероприятий' 
+      error: 'Ошибка загрузки истории мероприятий'
     });
   }
 });
@@ -2057,77 +2063,77 @@ app.get('/api/dashboard/my-events', authenticateToken, async (req, res) => {
 
 app.post('/api/dashboard/scan-qr', authenticateToken, async (req, res) => {
   let client = await getConnection();
-  
+
   try {
     const { userId: targetUserId, eventId, qrCode } = req.body;
-    const scannerUserId = req.user.id; 
-    
+    const scannerUserId = req.user.id;
+
     console.log(`📱 Сканирование QR кода организатором ${scannerUserId} для пользователя ${targetUserId} на мероприятие ${eventId}`);
-    
+
     const scannerResult = await client.query(
       'SELECT role FROM users WHERE id = $1',
       [scannerUserId]
     );
-    
-    if (scannerResult.rows.length === 0 || 
-        (scannerResult.rows[0].role !== 'organizer' && scannerUserId !== req.user.id)) {
+
+    if (scannerResult.rows.length === 0 ||
+      (scannerResult.rows[0].role !== 'organizer' && scannerUserId !== req.user.id)) {
       await client.end();
-      return res.status(403).json({ 
+      return res.status(403).json({
         success: false,
-        error: 'Только организаторы могут сканировать QR коды' 
+        error: 'Только организаторы могут сканировать QR коды'
       });
     }
-    
+
     await client.query('BEGIN');
-    
+
     const registrationResult = await client.query(
       `SELECT er.id 
        FROM event_registrations er
        WHERE er.user_id = $1 AND er.event_id = $2`,
       [targetUserId, eventId]
     );
-    
+
     if (registrationResult.rows.length === 0) {
       await client.query('ROLLBACK');
       await client.end();
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        error: 'Пользователь не записан на это мероприятие' 
+        error: 'Пользователь не записан на это мероприятие'
       });
     }
-    
+
     const attendanceResult = await client.query(
       `SELECT id, attended 
        FROM event_attendance 
        WHERE user_id = $1 AND event_id = $2`,
       [targetUserId, eventId]
     );
-    
+
     if (attendanceResult.rows.length > 0 && attendanceResult.rows[0].attended) {
       await client.query('ROLLBACK');
       await client.end();
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        error: 'QR код уже был отсканирован для этого мероприятия' 
+        error: 'QR код уже был отсканирован для этого мероприятия'
       });
     }
-    
+
     const eventResult = await client.query(
       'SELECT title, points FROM events WHERE id = $1',
       [eventId]
     );
-    
+
     if (eventResult.rows.length === 0) {
       await client.query('ROLLBACK');
       await client.end();
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        error: 'Мероприятие не найдено' 
+        error: 'Мероприятие не найдено'
       });
     }
-    
+
     const event = eventResult.rows[0];
-    
+
     await client.query(
       `INSERT INTO event_attendance (user_id, event_id, attended, scanned_at, scanned_by)
        VALUES ($1, $2, true, NOW(), $3)
@@ -2138,7 +2144,7 @@ app.post('/api/dashboard/scan-qr', authenticateToken, async (req, res) => {
          scanned_by = $3`,
       [targetUserId, eventId, scannerUserId]
     );
-    
+
     await client.query(
       `INSERT INTO user_points (user_id, points, source, event_id, created_at, updated_at)
        VALUES ($1, $2, 'event_attendance', $3, NOW(), NOW())
@@ -2148,20 +2154,20 @@ app.post('/api/dashboard/scan-qr', authenticateToken, async (req, res) => {
          updated_at = NOW()`,
       [targetUserId, event.points, eventId]
     );
-    
+
     await client.query(
       `INSERT INTO points_history (user_id, points, action, event_id, created_by)
        VALUES ($1, $2, 'attendance', $3, $4)`,
       [targetUserId, event.points, eventId, scannerUserId]
     );
-    
+
     await client.query('COMMIT');
     await client.end();
-    
+
     console.log(`✅ Посещение подтверждено. Начислено ${event.points} баллов`);
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       message: 'Посещение подтверждено успешно',
       points: event.points,
       event: {
@@ -2170,13 +2176,13 @@ app.post('/api/dashboard/scan-qr', authenticateToken, async (req, res) => {
       },
       timestamp: new Date().toISOString()
     });
-    
+
   } catch (error) {
     await client.query('ROLLBACK');
     await client.end();
-    
+
     console.error('❌ Ошибка сканирования QR кода:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: 'Ошибка сканирования QR кода',
       message: error.message
@@ -2187,34 +2193,34 @@ app.post('/api/dashboard/scan-qr', authenticateToken, async (req, res) => {
 app.get('/api/dashboard/my-qr', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
-    
+
     const timestamp = Date.now();
     const random = Math.random().toString(36).substr(2, 9);
     const qrData = {
       userId,
       timestamp,
       token: random,
-      expiresAt: timestamp + (5 * 60 * 1000) 
+      expiresAt: timestamp + (5 * 60 * 1000)
     };
-    
+
     const qrString = JSON.stringify(qrData);
     const qrCode = Buffer.from(qrString).toString('base64');
-    
+
     console.log(`🔄 Сгенерирован QR код для пользователя ${userId}`);
-    
+
     res.json({
       success: true,
       qrCode,
       expiresIn: '5 минут',
       timestamp: new Date().toISOString(),
-      refreshInterval: 30000 
+      refreshInterval: 30000
     });
-    
+
   } catch (error) {
     console.error('❌ Ошибка генерации QR кода:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      error: 'Ошибка генерации QR кода' 
+      error: 'Ошибка генерации QR кода'
     });
   }
 });
@@ -2223,14 +2229,14 @@ app.get('/api/dashboard/my-qr', authenticateToken, async (req, res) => {
 
 app.get('/api/dashboard/points', authenticateToken, async (req, res) => {
   let client;
-  
+
   try {
     const userId = req.user.id;
-    
+
     console.log('⭐ Запрос информации о баллах для пользователя:', userId);
-    
+
     client = await getConnection();
-    
+
     // Общее количество баллов
     const totalPointsResult = await client.query(
       `SELECT COALESCE(SUM(points), 0) as total_points 
@@ -2238,7 +2244,7 @@ app.get('/api/dashboard/points', authenticateToken, async (req, res) => {
        WHERE user_id = $1`,
       [userId]
     );
-    
+
     // История начислений
     const historyResult = await client.query(
       `SELECT 
@@ -2258,7 +2264,7 @@ app.get('/api/dashboard/points', authenticateToken, async (req, res) => {
       LIMIT 50`,
       [userId]
     );
-    
+
     // Рейтинг среди других пользователей
     const rankingResult = await client.query(
       `WITH ranked_users AS (
@@ -2277,12 +2283,12 @@ app.get('/api/dashboard/points', authenticateToken, async (req, res) => {
       WHERE ru.user_id = $1`,
       [userId]
     );
-    
+
     await client.end();
-    
+
     const totalPoints = parseInt(totalPointsResult.rows[0].total_points) || 0;
     const ranking = rankingResult.rows[0] || { rank: 0, total_points: 0, total_users: 0 };
-    
+
     res.json({
       success: true,
       points: {
@@ -2292,20 +2298,20 @@ app.get('/api/dashboard/points', authenticateToken, async (req, res) => {
           position: ranking.rank,
           totalPoints: ranking.total_points,
           totalUsers: ranking.total_users,
-          percentile: ranking.total_users > 0 
+          percentile: ranking.total_users > 0
             ? Math.round(((ranking.total_users - ranking.rank + 1) / ranking.total_users) * 100)
             : 0
         }
       },
       timestamp: new Date().toISOString()
     });
-    
+
   } catch (error) {
     if (client) await client.end();
     console.error('❌ Ошибка загрузки информации о баллах:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      error: 'Ошибка загрузки информации о баллах' 
+      error: 'Ошибка загрузки информации о баллах'
     });
   }
 });
@@ -2316,20 +2322,20 @@ app.get('/api/schools', async (req, res) => {
   try {
     const { search = '' } = req.query;
     const client = await getConnection();
-    
+
     let query = 'SELECT id, name, city, address, phone FROM schools WHERE is_active = true';
     const params = [];
-    
+
     if (search) {
       query += ' AND (LOWER(name) LIKE LOWER($1) OR LOWER(city) LIKE LOWER($1))';
       params.push(`%${search}%`);
     }
-    
+
     query += ' ORDER BY name LIMIT 20';
-    
+
     const result = await client.query(query, params);
     await client.end();
-    
+
     if (result.rows.length === 0) {
       res.json([
         { id: 1, name: 'Лицей №1 г. Уфа', city: 'Уфа' },
@@ -2339,7 +2345,7 @@ app.get('/api/schools', async (req, res) => {
     } else {
       res.json(result.rows);
     }
-    
+
   } catch (error) {
     console.error('❌ Ошибка при получении школ:', error);
     res.status(500).json({ error: error.message });
@@ -2351,7 +2357,7 @@ app.get('/api/regions', async (req, res) => {
     const client = await getConnection();
     const result = await client.query('SELECT id, name, federal_district FROM regions ORDER BY name');
     await client.end();
-    
+
     if (result.rows.length === 0) {
       res.json([
         { id: 1, name: 'Республика Башкортостан' },
@@ -2363,7 +2369,7 @@ app.get('/api/regions', async (req, res) => {
     } else {
       res.json(result.rows);
     }
-    
+
   } catch (error) {
     console.error('❌ Ошибка при получении регионов:', error);
     res.status(500).json({ error: error.message });
@@ -2373,25 +2379,25 @@ app.get('/api/regions', async (req, res) => {
 app.get('/api/stats/registrations', async (req, res) => {
   try {
     const client = await getConnection();
-    
+
     const totalResult = await client.query('SELECT COUNT(*) as count FROM users WHERE role = $1', ['abiturient']);
-    
+
     const today = new Date().toISOString().split('T')[0];
     const todayResult = await client.query(
       'SELECT COUNT(*) as count FROM users WHERE role = $1 AND DATE(created_at) = $2',
       ['abiturient', today]
     );
-    
+
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
+
     const activeResult = await client.query(
       'SELECT COUNT(DISTINCT user_id) as count FROM event_attendance WHERE scanned_at >= $1',
       [thirtyDaysAgo]
     );
-    
+
     await client.end();
-    
+
     res.json({
       total: parseInt(totalResult.rows[0].count) || 0,
       today: parseInt(todayResult.rows[0].count) || 0,
@@ -2399,10 +2405,10 @@ app.get('/api/stats/registrations', async (req, res) => {
       lastUpdated: new Date().toISOString(),
       database: 'NIRS'
     });
-    
+
   } catch (error) {
     console.error('❌ Ошибка при получении статистики:', error);
-    res.json({ 
+    res.json({
       total: 0,
       today: 0,
       active: 0,
@@ -2415,9 +2421,9 @@ app.get('/api/stats/registrations', async (req, res) => {
 app.get('/api/news/rusoil', async (req, res) => {
   try {
     console.log('📡 Запрос на новости RUSOIL');
-    
-    if (newsCache.data && newsCache.timestamp && 
-        (Date.now() - newsCache.timestamp) < newsCache.ttl) {
+
+    if (newsCache.data && newsCache.timestamp &&
+      (Date.now() - newsCache.timestamp) < newsCache.ttl) {
       console.log('💾 Возвращаем данные из кэша');
       return res.json({
         success: true,
@@ -2426,19 +2432,19 @@ app.get('/api/news/rusoil', async (req, res) => {
         news: newsCache.data
       });
     }
-    
+
     const path = require('path');
     const parserPath = path.join(__dirname, 'parsers', 'rusoilParser');
     console.log('Пытаемся загрузить парсер из:', parserPath);
-    
+
     const RusoilParser = require(parserPath);
     const parser = new RusoilParser();
-    
+
     const news = await parser.parseNews(6);
-    
+
     newsCache.data = news;
     newsCache.timestamp = Date.now();
-    
+
     res.json({
       success: true,
       cached: false,
@@ -2446,10 +2452,10 @@ app.get('/api/news/rusoil', async (req, res) => {
       timestamp: new Date().toISOString(),
       source: 'rusoil.net'
     });
-    
+
   } catch (error) {
     console.error('❌ Ошибка загрузки новостей:', error);
-    
+
     const fallbackNews = [
       {
         id: 1,
@@ -2484,7 +2490,7 @@ app.get('/api/news/rusoil', async (req, res) => {
         category: "Образование"
       }
     ];
-    
+
     res.json({
       success: false,
       error: error.message,
@@ -2500,12 +2506,12 @@ app.get('/api/news/rusoil', async (req, res) => {
 app.get('/api/admin/users', authenticateToken, async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
-      return res.status(403).json({ 
+      return res.status(403).json({
         success: false,
-        error: 'Доступ запрещен. Требуются права администратора.' 
+        error: 'Доступ запрещен. Требуются права администратора.'
       });
     }
-    
+
     const client = await getConnection();
     const result = await client.query(
       `SELECT 
@@ -2529,15 +2535,15 @@ app.get('/api/admin/users', authenticateToken, async (req, res) => {
       LEFT JOIN user_points up ON u.id = up.user_id
       ORDER BY u.created_at DESC`
     );
-    
+
     await client.end();
-    
+
     res.json({
       success: true,
       users: result.rows,
       count: result.rows.length
     });
-    
+
   } catch (error) {
     console.error('❌ Ошибка при получении пользователей:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -2548,25 +2554,25 @@ app.get('/api/admin/users', authenticateToken, async (req, res) => {
 
 app.get('/api/specialist/events/:id/materials', authenticateToken, isSpecialist, async (req, res) => {
   let client = await getConnection();
-  
+
   try {
     const eventId = req.params.id;
-    
+
     console.log('Запрос материалов для мероприятия:', eventId);
-    
+
     const eventCheck = await client.query(
       'SELECT id FROM events WHERE id = $1 AND created_by = $2',
       [eventId, req.user.id]
     );
-    
+
     if (eventCheck.rows.length === 0) {
       await client.end();
-      return res.status(403).json({ 
+      return res.status(403).json({
         success: false,
-        error: 'Нет прав доступа к материалам этого мероприятия' 
+        error: 'Нет прав доступа к материалам этого мероприятия'
       });
     }
-    
+
     const tableCheck = await client.query(`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
@@ -2574,7 +2580,7 @@ app.get('/api/specialist/events/:id/materials', authenticateToken, isSpecialist,
         AND table_name = 'event_materials'
       )
     `);
-    
+
     if (!tableCheck.rows[0].exists) {
       await client.end();
       return res.json({
@@ -2584,7 +2590,7 @@ app.get('/api/specialist/events/:id/materials', authenticateToken, isSpecialist,
         message: 'Таблица материалов еще не создана'
       });
     }
-    
+
     const result = await client.query(
       `SELECT 
         id,
@@ -2607,19 +2613,19 @@ app.get('/api/specialist/events/:id/materials', authenticateToken, isSpecialist,
       ORDER BY uploaded_at DESC`,
       [eventId]
     );
-    
+
     await client.end();
-    
+
     res.json({
       success: true,
       materials: result.rows,
       count: result.rows.length
     });
-    
+
   } catch (error) {
     await client.end();
     console.error('❌ Ошибка загрузки материалов:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: 'Ошибка загрузки материалов'
     });
@@ -2630,7 +2636,7 @@ app.get('/api/specialist/events/:id/materials', authenticateToken, isSpecialist,
 
 async function createFeedbackTableIfNeeded() {
   let client = await getConnection();
-  
+
   try {
     const tableCheck = await client.query(`
       SELECT EXISTS (
@@ -2639,7 +2645,7 @@ async function createFeedbackTableIfNeeded() {
         AND table_name = 'feedback'
       )
     `);
-    
+
     if (!tableCheck.rows[0].exists) {
       console.log('Создаем таблицу feedback...');
       await client.query(`
@@ -2668,10 +2674,10 @@ async function createFeedbackTableIfNeeded() {
 
 app.get('/api/specialist/feedback', authenticateToken, isSpecialist, async (req, res) => {
   let client = await getConnection();
-  
+
   try {
     await createFeedbackTableIfNeeded();
-    
+
     const result = await client.query(`
       SELECT 
         f.id,
@@ -2693,20 +2699,20 @@ app.get('/api/specialist/feedback', authenticateToken, isSpecialist, async (req,
       ORDER BY f.created_at DESC
       LIMIT 50
     `, [req.user.id]);
-    
+
     await client.end();
-    
+
     res.json({
       success: true,
       feedback: result.rows,
       count: result.rows.length,
       unread_count: result.rows.filter(f => !f.is_read).length
     });
-    
+
   } catch (error) {
     await client.end();
     console.error('❌ Ошибка загрузки обратной связи:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: 'Ошибка загрузки обратной связи',
       feedback: []
@@ -2718,10 +2724,10 @@ app.get('/api/specialist/feedback', authenticateToken, isSpecialist, async (req,
 
 app.get('/api/specialist/analytics/events', authenticateToken, isSpecialist, async (req, res) => {
   let client = await getConnection();
-  
+
   try {
     const { period = 'monthly', start_date, end_date } = req.query;
-    
+
     const tableCheck = await client.query(`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
@@ -2729,7 +2735,7 @@ app.get('/api/specialist/analytics/events', authenticateToken, isSpecialist, asy
         AND table_name = 'analytics_events'
       )
     `);
-    
+
     if (!tableCheck.rows[0].exists) {
       await client.end();
       return res.json({
@@ -2738,7 +2744,7 @@ app.get('/api/specialist/analytics/events', authenticateToken, isSpecialist, asy
         message: 'Таблица аналитики еще не создана'
       });
     }
-    
+
     let query = `
       SELECT 
         ae.*,
@@ -2748,44 +2754,44 @@ app.get('/api/specialist/analytics/events', authenticateToken, isSpecialist, asy
       JOIN events e ON ae.event_id = e.id
       WHERE e.created_by = $1
     `;
-    
+
     const params = [req.user.id];
     let paramIndex = 2;
-    
+
     if (start_date) {
       query += ` AND ae.calculation_date >= $${paramIndex}`;
       params.push(start_date);
       paramIndex++;
     }
-    
+
     if (end_date) {
       query += ` AND ae.calculation_date <= $${paramIndex}`;
       params.push(end_date);
       paramIndex++;
     }
-    
+
     if (period) {
       query += ` AND ae.period_type = $${paramIndex}`;
       params.push(period);
       paramIndex++;
     }
-    
+
     query += ` ORDER BY ae.calculation_date DESC LIMIT 100`;
-    
+
     const result = await client.query(query, params);
-    
+
     await client.end();
-    
+
     res.json({
       success: true,
       analytics: result.rows,
       count: result.rows.length
     });
-    
+
   } catch (error) {
     await client.end();
     console.error('❌ Ошибка загрузки аналитики:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: 'Ошибка загрузки аналитики',
       analytics: []

@@ -14,7 +14,7 @@
             <!-- Логотип и название -->
             <div class="university-header">
               <div class="university-icon">
-                <img src="C:\Users\evgen\university-landing\src\assets\2.png" alt="Университет" class="icon-img">
+                <img src="@/assets/2.png" alt="Университет" class="icon-img">
               </div>
               <h2 class="university-name">ФГБОУ ВО УГНТУ г. Уфа</h2>
             </div>
@@ -22,7 +22,7 @@
             <div class="contact-details">
               <div class="contact-item">
                 <div class="university-icon">
-                <img src="C:\Users\evgen\university-landing\src\assets\Снимок экрана 2025-12-15 213957_resized.png" alt="Адрес" class="icon-img">
+                <img src="@/assets/address_icon.png" alt="Адрес" class="icon-img">
               </div>
                 <div class="contact-content">
                   <h3 class="contact-label">Адрес</h3>
@@ -32,7 +32,7 @@
 
               <div class="contact-item">
                 <div class="university-icon">
-                <img src="C:\Users\evgen\university-landing\src\assets\3.png" alt="телефон" class="icon-img">
+                <img src="@/assets/3.png" alt="телефон" class="icon-img">
               </div>
                 <div class="contact-content">
                   <h3 class="contact-label">Телефон</h3>
@@ -42,7 +42,7 @@
 
               <div class="contact-item">
                 <div class="university-icon">
-                <img src="C:\Users\evgen\university-landing\src\assets\4.png" alt="сайт" class="icon-img">
+                <img src="@/assets/4.png" alt="сайт" class="icon-img">
               </div>
                 <div class="contact-content">
                   <h3 class="contact-label">Сайт</h3>
@@ -52,7 +52,7 @@
 
               <div class="contact-item">
                 <div class="university-icon">
-                <img src="C:\Users\evgen\university-landing\src\assets\5.png" alt="email" class="icon-img">
+                <img src="@/assets/5.png" alt="email" class="icon-img">
               </div>
                 <div class="contact-content">
                   <h3 class="contact-label">E-mail</h3>
