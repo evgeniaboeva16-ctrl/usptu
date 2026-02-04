@@ -2,7 +2,7 @@
   <header class="header">
     <div class="container">
       <div class="logo-container">
-        <img src="@/assets/result_Снимок экрана 2025-12-15 015552.png" alt="Logo" class="logo-icon" />
+        <img src="@/assets/logo_icon.png" alt="Logo" class="logo-icon" />
         <span class="logo">UniVerse</span>
       </div>
       
